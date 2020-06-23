@@ -1,13 +1,14 @@
 const mongoose = require('mongoose');
 
-// the run-rs command will by default start the replica sets on the following ports
 const dbUri = process.env.DB_URI; 
 // a simple mongoose model
+
+
+/////   Setup the user and listingsAndReviews collections /////
+
 const userSchema = new mongoose.Schema({
   email: String, name: String, reservations: mongoose.Schema.Types.Mixed 
 });
-
-
 const User = mongoose.model('User', userSchema);
 
 const listingsAndReviewsSchema = new mongoose.Schema({
@@ -15,6 +16,14 @@ const listingsAndReviewsSchema = new mongoose.Schema({
 }, { collection: 'listingsAndReviews' });
 const ListingsAndReviews = mongoose.model('listingsAndReviews', listingsAndReviewsSchema);
 
+
+/////                                                   /////
+
+
+/**
+ * Make a reservation by updating the user and listingsAndReviews collections atomically using
+ * transactions
+**/
 async function main() {
   // connecting the DB
   await mongoose.connect(dbUri, {  useNewUrlParser: true, useUnifiedTopology: true });
@@ -27,11 +36,16 @@ async function main() {
   );
 }
 
+/**
+ * Makes a reservation for a particular User on a particular listing
+**/
 async function createReservation(userEmail, nameOfListing, reservationDates, reservationDetails) {
   const reservation = createReservationDocument(nameOfListing, reservationDates, reservationDetails);
 
+  // start the session, which will encapsulate our atomic operations.
   const session = await mongoose.startSession();
   try {
+    // Any changes within this Transaction will only be visible to external clients once the Transaction completes
     await session.withTransaction(async () => {
       const usersUpdateResults = await User.updateOne(
        { email: userEmail },
@@ -45,8 +59,7 @@ async function createReservation(userEmail, nameOfListing, reservationDates, res
         { name: nameOfListing, datesReserved: { $in: reservationDates } }
       );
 
-      console.log('made it to isListingReservedResults');
-      
+      // we don't want to double update a listingsAndReviews
       if (isListingReservedResults) {
         await session.abortTransaction();
         console.error("This listing is already reserved for at least one of the given dates. The reservation could not be created.");
@@ -54,6 +67,7 @@ async function createReservation(userEmail, nameOfListing, reservationDates, res
         return;
       }
 
+      // go ahead and make the reservation on the listingsAndReviews
       const listingsAndReviewsUpdateResults = await ListingsAndReviews.updateOne(
         { name: nameOfListing },
         { $addToSet: { datesReserved: { $each: reservationDates } } }
@@ -69,6 +83,9 @@ async function createReservation(userEmail, nameOfListing, reservationDates, res
   }
 }
 
+/**
+ * Creates the BSON document for updating a reservation
+ **/
 function createReservationDocument(nameOfListing, reservationDates, reservationDetails) {
   // Create the reservation
   let reservation = {
