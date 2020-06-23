@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // the run-rs command will by default start the replica sets on the following ports
-const dbUri = 'mongodb+srv://dbUser:vF2eEctcBYK0ynFUHnBFlXpgZ@cluster0-8upbj.mongodb.net/sample_airbnb?retryWrites=true&w=majority';
+const dbUri = process.env.DB_URI;
 
 async function init() {
   // connecting the DB

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // the run-rs command will by default start the replica sets on the following ports
-const dbUri = 'mongodb+srv://dbUser:vF2eEctcBYK0ynFUHnBFlXpgZ@cluster0-8upbj.mongodb.net/sample_airbnb?retryWrites=true&w=majority';
+const dbUri = process.env.DB_URI; 
 // a simple mongoose model
 const userSchema = new mongoose.Schema({
   email: String, name: String, reservations: mongoose.Schema.Types.Mixed 
@@ -17,7 +17,7 @@ const ListingsAndReviews = mongoose.model('listingsAndReviews', listingsAndRevie
 
 async function main() {
   // connecting the DB
-  await mongoose.connect(dbUri/*, { replicaSet: 'rs' }*/);
+  await mongoose.connect(dbUri, {  useNewUrlParser: true, useUnifiedTopology: true });
 
   await createReservation(
     "leslie@example.com",
@@ -33,7 +33,6 @@ async function createReservation(userEmail, nameOfListing, reservationDates, res
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      console.log('beginning');
       const usersUpdateResults = await User.updateOne(
        { email: userEmail },
        { $addToSet: { reservations: reservation } }
@@ -66,6 +65,7 @@ async function createReservation(userEmail, nameOfListing, reservationDates, res
     })
   } finally {
     session.endSession();
+    process.exit(0);
   }
 }
 
